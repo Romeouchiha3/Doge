@@ -1,11 +1,11 @@
 const express = require("express");
 const http = require("http");
+const path = require("path"); // File path handle karne ke liye module add kiya
 const { Server } = require("socket.io");
 const telegramBot = require("node-telegram-bot-api");
 const https = require("https");
 const multer = require("multer");
 const { createClient } = require('@supabase/supabase-js');
-
 
 // Supabase Setup
 const supabaseUrl = process.env.SUPABASE_URL || 'https://nebwfonyhfgxnfkiisvs.supabase.co';
@@ -65,6 +65,20 @@ async function getUserUid(chatId) {
   const { data } = await supabase.from('doge').select('uid').eq('tg_id', chatId).single();
   return data ? data.uid : null;
 }
+
+// ---------------- HTML ROUTES ----------------
+
+// Root route
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// /index.html route
+app.get("/index.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// ---------------------------------------------
 
 // Upload Route per UID
 app.post("/upload/:uid", uploader.single('file'), async (req, res) => {
