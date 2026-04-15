@@ -18,8 +18,8 @@ const bot = new telegramBot(data.token, {
 });
 
 // 3. Supabase Integration
-const supabaseUrl = process.env.SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const supabaseKey = process.env.SUPABASE_KEY || 'YOUR_SUPABASE_KEY';
+const supabaseUrl = process.env.SUPABASE_URL || 'https://nebwfonyhfgxnfkiisvs.supabase.co';
+const supabaseKey = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5lYndmb255aGZneG5ma2lpc3ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNjc0MjMsImV4cCI6MjA5MDk0MzQyM30.me-P_mhC3droVGrHSlD_G3h9-ZgGgR3hy8VyDLFTp58';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const appData = new Map();
