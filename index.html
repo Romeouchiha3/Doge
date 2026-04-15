@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Romeo Uchiha | Auth</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { background-color: #111; color: red; font-family: monospace; text-align: center; padding-top: 50px; }
+        .box { border: 2px solid red; padding: 20px; width: 300px; margin: auto; box-shadow: 0 0 15px red; }
+        input, button { width: 90%; margin: 10px 0; padding: 10px; background: #222; color: white; border: 1px solid red; }
+        button { cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.3s; }
+        button:hover { background: red; color: black; }
+        .disclaimer { font-size: 12px; color: gray; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="box">
+        <h2>👁️‍🗨️ Romeo Uchiha</h2>
+        <input type="text" id="uid" placeholder="Enter Unique ID (UID)" required>
+        <input type="password" id="password" placeholder="Enter Password" required>
+        <button onclick="handleAuth()">Login / Register</button>
+        <p id="status"></p>
+        <p id="urlDisplay" style="color: lime; word-wrap: break-word;"></p>
+    </div>
+
+    <div class="disclaimer">
+        ⚠️ Ethical use only. This tool is made for testing and ethical use and you are responsible for your actions.
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://nebwfonyhfgxnfkiisvs.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5lYndmb255aGZneG5ma2lpc3ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNjc0MjMsImV4cCI6MjA5MDk0MzQyM30.me-P_mhC3droVGrHSlD_G3h9-ZgGgR3hy8VyDLFTp58';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const BASE_URL = "https://doge-production-517d.up.railway.app";
+
+        async function handleAuth() {
+            const uid = document.getElementById("uid").value;
+            const password = document.getElementById("password").value;
+            const status = document.getElementById("status");
+            const urlDisplay = document.getElementById("urlDisplay");
+
+            if (!uid || !password) return status.innerText = "UID and Password required!";
+
+            status.innerText = "⏳ Loading Sharingan...";
+
+            const { data, error } = await supabase.from('doge').select('*').eq('uid', uid).single();
+
+            if (!data) {
+                // Register
+                const uniqueUrl = `${BASE_URL}/${uid}`;
+                await supabase.from('doge').insert([{ uid, password, url: uniqueUrl }]);
+                status.innerText = "Registered successfully! Go to bot and send /lg uid@pass";
+                urlDisplay.innerText = "Your App URL: " + uniqueUrl;
+            } else {
+                // Login
+                if (data.password === password) {
+                    status.innerText = "Welcome back, Romeo Uchiha!";
+                    urlDisplay.innerText = "Your App URL: " + data.url;
+                } else {
+                    status.innerText = "❌ Incorrect Password!";
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+
+
