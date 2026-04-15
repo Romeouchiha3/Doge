@@ -4,7 +4,8 @@ const { Server } = require("socket.io");
 const telegramBot = require("node-telegram-bot-api");
 const https = require("https");
 const multer = require("multer");
-const { createClient } = require('@supabase/supabase-client');
+const { createClient } = require('@supabase/supabase-js');
+
 
 // Supabase Setup
 const supabaseUrl = process.env.SUPABASE_URL || 'https://nebwfonyhfgxnfkiisvs.supabase.co';
